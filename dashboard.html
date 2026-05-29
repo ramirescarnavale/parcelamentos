@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Financeiro — Victor & Diego</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #F9F9FB; color: #1C1C28; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    
+    const SEED = JSON.parse(localStorage.getItem('fichas_juridico_v2')) || [];
+    const SEED_ALVARAS = JSON.parse(localStorage.getItem('alvaras_juridico_v1')) || [];
+
+    const brl = (n) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+    const fmtD = (d) => new Date(d + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+    function MetricCard({ label, value, accent }) {
+      return (
+        <div style={{ background: "#fff", border: "1px solid #F0F0F5", borderRadius: 14, padding: 16, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "#8E8EA0", fontWeight: 600, marginBottom: 8, textTransform: "uppercase" }}>{label}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: accent }}>{value}</div>
+        </div>
+      );
+    }
+
+    function MensalView({ fichas }) {
+      const hoje = new Date();
+      const [mes, setMes] = useState(hoje.getMonth());
+      const [ano, setAno] = useState(hoje.getFullYear());
+      const [filtroSituacao, setFiltroSituacao] = useState("Todos");
+
+      const prev = () => { if(mes===0){setMes(11);setAno(a=>a-1);}else setMes(m=>m-1); };
+      const next = () => { if(mes===11){setMes(0);setAno(a=>a+1);}else setMes(m=>m+1); };
+
+      const linhas = [];
+      fichas.forEach(f => {
+        f.parcelas.forEach((p,idx) => {
+          const [py,pm] = p.vencimento.split("-").map(Number);
+          if(pm-1===mes && py===ano) {
+            if(filtroSituacao==="Todos" || p.situacao===filtroSituacao) {
+              linhas.push({ficha:f, parcela:p, idx});
+            }
+          }
+        });
+      });
+      linhas.sort((a,b)=>a.parcela.vencimento.localeCompare(b.parcela.vencimento));
+
+      const totVal = linhas.reduce((s,l)=>s+l.parcela.valor,0);
+      const totHon = linhas.reduce((s,l)=>s+l.parcela.honorarios,0);
+      const totRep = linhas.reduce((s,l)=>s+l.parcela.repasse,0);
+
+      return (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:"1.25rem"}}>
+            <button onClick={prev} style={{background:"#fff",border:"1px solid #E0E0E8",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16,color:"#636366",fontWeight:700}}>‹</button>
+            <div style={{fontSize:16,fontWeight:700,color:"#1C1C28",minWidth:140,textAlign:"center"}}>
+              {MESES[mes]} de {ano}
+            </div>
+            <button onClick={next} style={{background:"#fff",border:"1px solid #E0E0E8",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16,color:"#636366",fontWeight:700}}>›</button>
+          </div>
+
+          <div style={{display:"flex",gap:8,marginBottom:"1.25rem",flexWrap:"wrap"}}>
+            {["Todos","Recebido final","Aguardando pagamento","Vencido"].map(s=>(
+              <button key={s} onClick={()=>setFiltroSituacao(s)} style={{background:filtroSituacao===s?"#6C63FF":"#fff",border:filtroSituacao===s?"2px solid #6C63FF":"1px solid #E0E0E8",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600,color:filtroSituacao===s?"#fff":"#636366"}}>
+                {s}
+              </button>
+            ))}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:"1.25rem"}}>
+            {[["Parcelas",linhas.length+" lançamentos","#6C63FF"],["Total",brl(totVal),"#3A3A4A"],["Honorários",brl(totHon),"#34C759"],["Repasse",brl(totRep),"#2196F3"]].map(([l,v,a])=>(
+              <MetricCard key={l} label={l} value={v} accent={a}/>
+            ))}
+          </div>
+
+          {linhas.length===0 ? (
+            <div style={{textAlign:"center",padding:"3rem",color:"#AEAEB2",fontSize:14,border:"2px dashed #E0E0E8",borderRadius:14,background:"#fff"}}>
+              Nenhum vencimento em {MESES[mes]}/{ano}.
+            </div>
+          ) : (
+            <div style={{background:"#fff",border:"1px solid #F0F0F5",borderRadius:14,overflow:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{background:"#FAFAFA"}}>
+                    {["Vencimento","Ficha","Cliente","Parcela","Valor","Honorários","Repasse","Situação"].map(h=>(
+                      <th key={h} style={{textAlign:"left",padding:"10px 12px",fontWeight:600,color:"#8E8EA0",fontSize:11,borderBottom:"1px solid #F0F0F5",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhas.map((l,i)=>(
+                    <tr key={i} style={{borderBottom:"1px solid #F0F0F5",background:i%2===0?"#fff":"#FAFAFE"}}>
+                      <td style={{padding:"10px 12px",fontWeight:600,color:"#1C1C28",whiteSpace:"nowrap"}}>{fmtD(l.parcela.vencimento)}</td>
+                      <td style={{padding:"10px 12px",fontWeight:600,color:"#6C63FF"}}>{l.ficha.numero_ficha}</td>
+                      <td style={{padding:"10px 12px",fontSize:11,color:"#636366"}}>{l.ficha.cliente.substring(0,25)}</td>
+                      <td style={{padding:"10px 12px",fontSize:11,color:"#636366"}}>{l.parcela.numero}</td>
+                      <td style={{padding:"10px 12px",fontWeight:600,color:"#1C1C28"}}>{brl(l.parcela.valor)}</td>
+                      <td style={{padding:"10px 12px",color:"#34C759",fontWeight:600}}>{brl(l.parcela.honorarios)}</td>
+                      <td style={{padding:"10px 12px",color:"#2196F3",fontWeight:600}}>{brl(l.parcela.repasse)}</td>
+                      <td style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:l.parcela.situacao==="Recebido final"?"#34C759":l.parcela.situacao==="Vencido"?"#FF3B30":"#FF9500"}}>{l.parcela.situacao}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Dashboard() {
+      const [fichas, setFichas] = useState(SEED);
+
+      return (
+        <div style={{padding:"2rem",maxWidth:"1400px",margin:"0 auto"}}>
+          <div style={{marginBottom:"2rem"}}>
+            <h1 style={{fontSize:32,fontWeight:700,marginBottom:8}}>📊 Dashboard Financeiro</h1>
+            <p style={{color:"#8E8EA0",fontSize:14}}>Victor & Diego — Controle de Fichas Jurídicas</p>
+          </div>
+
+          <div style={{background:"#fff",borderRadius:14,border:"1px solid #F0F0F5",padding:"2rem",marginTop:"2rem"}}>
+            <MensalView fichas={fichas} />
+          </div>
+
+          <div style={{textAlign:"center",marginTop:"3rem",padding:"2rem",color:"#AEAEB2",fontSize:12}}>
+            <p>Dados locais · {fichas.length} fichas · Atualizado em tempo real</p>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<Dashboard />);
+  </script>
+</body>
+</html>
